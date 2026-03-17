@@ -1,5 +1,14 @@
 #include "chibicc.h"
 
+#ifdef _WIN32
+
+#include <processthreadsapi.h>
+#include <processenv.h>
+#include <synchapi.h>
+#include <handleapi.h>
+
+#endif
+
 typedef enum {
   FILE_NONE, FILE_C, FILE_ASM, FILE_OBJ, FILE_AR, FILE_DSO,
 } FileType;
@@ -415,18 +424,65 @@ static void run_subprocess(char **argv) {
     fprintf(stderr, "\n");
   }
 
-  if (fork() == 0) {
-    // Child process. Run a new command.
-    execvp(argv[0], argv);
-    fprintf(stderr, "exec failed: %s: %s\n", argv[0], strerror(errno));
-    _exit(1);
-  }
+  #ifdef _WIN32
+    fprintf(stdout, "Gonna spawn child proces: %s", argv[0]);
+    
+    const DWORD M_STD_INPUT_HANDLE = ((DWORD)-10);
+    const DWORD M_STD_OUTPUT_HANDLE = ((DWORD)-11);
+    const DWORD M_STD_ERROR_HANDLE = ((DWORD)-12);
+    const DWORD M_STARTF_USESTDHANDLES = 0x00000100;
 
-  // Wait for the child process to finish.
-  int status;
-  while (wait(&status) > 0);
-  if (status != 0)
-    exit(1);
+    STARTUPINFOA startupInfo;
+    memset(&startupInfo, 0, sizeof(startupInfo));
+    startupInfo.cb = sizeof(startupInfo);
+    startupInfo.hStdInput = GetStdHandle(M_STD_INPUT_HANDLE);
+    startupInfo.hStdOutput = GetStdHandle(M_STD_OUTPUT_HANDLE);
+    startupInfo.hStdError = GetStdHandle(M_STD_ERROR_HANDLE);
+    startupInfo.dwFlags |= M_STARTF_USESTDHANDLES;
+
+    PROCESS_INFORMATION processInfo;
+    memset(&processInfo, 0, sizeof(processInfo));
+
+    //TODO: Make one str buff contain all arg
+    char commandLine[1] = {0};
+
+    if(!CreateProcessA(argv[0], commandLine, NULL, NULL, FALSE, 0, NULL, NULL, &startupInfo, &processInfo)){
+        fprintf(stderr, "exec failed: %s: %s\n", argv[0], strerror(errno));
+        _exit(1);
+    }
+    
+    const DWORD INFFF = 0xffffffff;
+    const DWORD M_WAIT_OBJECT_0 = 0;
+    if(WaitForSingleObject(processInfo.hProcess, INFFF) != M_WAIT_OBJECT_0) {
+      fprintf(stderr, "wait failed");
+      exit(1);
+    }
+
+    DWORD childRetCode = 0;
+    GetExitCodeProcess(processInfo.hProcess, &childRetCode);
+
+    if(childRetCode != 0){
+      // Child error
+      exit(1);
+    }
+
+    CloseHandle(processInfo.hProcess);
+
+  #elif
+    if (fork() == 0) {
+      // Child process. Run a new command.
+      execvp(argv[0], argv);
+      fprintf(stderr, "exec failed: %s: %s\n", argv[0], strerror(errno));
+      _exit(1);
+    }
+
+    // Wait for the child process to finish.
+    int status;
+    while (wait(&status) > 0);
+    if (status != 0)
+      exit(1);
+
+  #endif
 }
 
 static void run_cc1(int argc, char **argv, char *input, char *output) {
@@ -574,7 +630,7 @@ static void cc1(void) {
   char *buf;
   size_t buflen;
   FILE *output_buf = open_memstream(&buf, &buflen);
-
+  
   // Traverse the AST to emit assembly.
   codegen(prog, output_buf);
   fclose(output_buf);
