@@ -65,6 +65,24 @@ static void add_default_include_paths(char *argv0) {
     strarray_push(&std_include_paths, include_paths.data[i]);
 }
 
+#ifdef _WIN32
+
+static char* strndup(const char *s, size_t n) {
+    char *p;
+    size_t n1;
+
+    for (n1 = 0; n1 < n && s[n1] != '\0'; n1++)
+        continue;
+    p = malloc(n + 1);
+    if (p != NULL) {
+        memcpy(p, s, n1);
+        p[n1] = '\0';
+    }
+    return p;
+}
+
+#endif
+
 static void define(char *str) {
   char *eq = strchr(str, '=');
   if (eq)
