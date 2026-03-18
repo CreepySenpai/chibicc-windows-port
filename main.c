@@ -6,6 +6,7 @@
 #include <processenv.h>
 #include <synchapi.h>
 #include <handleapi.h>
+#include <fileapi.h>
 
 #endif
 
@@ -646,14 +647,91 @@ static void assemble(char *input, char *output) {
   run_subprocess(cmd);
 }
 
+#ifdef _WIN32
+
+static void find_file_recursive(const char* pathToFind, const char* fileToFind, char** pathOut) {
+  char pathContainAllDir[256] = {};
+  memset(pathContainAllDir, 0, sizeof(pathContainAllDir));
+  const int fmtCount = snprintf(pathContainAllDir, sizeof(pathContainAllDir), "%s/*", pathToFind);
+
+  pathContainAllDir[fmtCount] = 0;
+
+  WIN32_FIND_DATAA fileData;
+  memset(&fileData, 0, sizeof(fileData));
+    
+  HANDLE fileHandle = FindFirstFileA(pathContainAllDir, &fileData);
+
+  if(fileHandle == INVALID_HANDLE_VALUE){
+    return;
+  }
+
+  do{
+        if(*pathOut){
+            return;
+        }
+
+        // If it is dir, recursive to all child to find file
+        if(fileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY){
+            if(strcmp(fileData.cFileName, ".") == 0 || strcmp(fileData.cFileName, "..") == 0){
+              continue;
+            }
+
+            char nextPathToFind[256] = {};
+            memset(nextPathToFind, 0, sizeof(nextPathToFind));
+            const int fmtCount2 = snprintf(nextPathToFind, sizeof(nextPathToFind), "%s/%s", pathToFind, fileData.cFileName);
+            nextPathToFind[fmtCount2] = 0;
+            find_file_recursive(nextPathToFind, fileToFind, pathOut);
+
+        }
+        else{
+            if(strcmp(fileData.cFileName, fileToFind) == 0){
+              // Found file
+              const size_t pathBufferLen = strlen(pathToFind) + strlen(fileData.cFileName) + 10;
+
+              char* pathBuffer = (char*)malloc(pathBufferLen);
+              // memset(pathBuffer, 0, pathBufferLen);
+              const int fmtCount2 = snprintf(pathBuffer, pathBufferLen, "%s/%s", pathToFind, fileData.cFileName);
+              pathBuffer[fmtCount2] = 0;
+
+              *pathOut = pathBuffer;
+            }
+        }
+    }
+    while(FindNextFileA(fileHandle, &fileData) != 0);
+}
+
+#endif
+
 static char *find_file(char *pattern) {
   char *path = NULL;
+
+#ifdef _WIN32
+    // Separate path + file need to finc
+  char* pathToFind = NULL;
+  char* fileToFind = NULL;
+
+  int countToAsterisk = 0; 
+  while(pattern[countToAsterisk] != '*'){
+    ++countToAsterisk;
+  }
+
+  pattern[countToAsterisk] = 0;
+  pattern[countToAsterisk + 1] = 0;
+  pathToFind = pattern;
+  fileToFind = pattern + (countToAsterisk + 2);
+
+  find_file_recursive(pathToFind, fileToFind, &path);
+
+#elif
+
   glob_t buf = {};
   glob(pattern, 0, NULL, &buf);
   if (buf.gl_pathc > 0)
     path = strdup(buf.gl_pathv[buf.gl_pathc - 1]);
   globfree(&buf);
   return path;
+
+#endif
 }
 
 // Returns true if a given file exists.
