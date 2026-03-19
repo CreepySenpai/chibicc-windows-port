@@ -627,18 +627,30 @@ static void cc1(void) {
 
   Obj *prog = parse(tok);
 
+  char* buf = NULL;
+  size_t bufSize = 0;
+
+#ifdef _WIN32
+  // We alloc a big mem for codegen to it
+  buf = (char*)malloc(MAX_CODE_GEN_BUFFER_CAP);
+
+  assert(buf != NULL && "Bro really need more RAM!!!");
+
+  codegen(prog, buf, &bufSize);
+
+#elif
   // Open a temporary output buffer.
-  char *buf;
-  size_t buflen;
-  FILE *output_buf = open_memstream(&buf, &buflen);
-  
+  FILE *output_buf = open_memstream(&buf, &bufSize);
+    
   // Traverse the AST to emit assembly.
   codegen(prog, output_buf);
   fclose(output_buf);
 
+#endif
+
   // Write the asembly text to a file.
   FILE *out = open_file(output_file);
-  fwrite(buf, buflen, 1, out);
+  fwrite(buf, bufSize, 1, out);
   fclose(out);
 }
 
@@ -706,10 +718,7 @@ static char *find_file(char *pattern) {
   char *path = NULL;
 
 #ifdef _WIN32
-    // Separate path + file need to finc
-  char* pathToFind = NULL;
-  char* fileToFind = NULL;
-
+  // Separate path + file need to find
   int countToAsterisk = 0; 
   while(pattern[countToAsterisk] != '*'){
     ++countToAsterisk;
@@ -717,8 +726,9 @@ static char *find_file(char *pattern) {
 
   pattern[countToAsterisk] = 0;
   pattern[countToAsterisk + 1] = 0;
-  pathToFind = pattern;
-  fileToFind = pattern + (countToAsterisk + 2);
+
+  char* pathToFind = pattern;
+  char* fileToFind = pattern + (countToAsterisk + 2);
 
   find_file_recursive(pathToFind, fileToFind, &path);
 

@@ -25,6 +25,13 @@
 #define MAX(x, y) ((x) < (y) ? (y) : (x))
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 
+#ifdef _WIN32
+
+// Is 100MB not enough??
+#define MAX_CODE_GEN_BUFFER_CAP 0x06400000
+
+#endif
+
 #ifndef __GNUC__
 # define __attribute__(x)
 #endif
@@ -412,7 +419,17 @@ void add_type(Node *node);
 // codegen.c
 //
 
+#ifdef _WIN32
+
+void codegen(Obj *prog, char* out_buff, size_t* out_buff_size);
+
+#elif 
+
 void codegen(Obj *prog, FILE *out);
+
+#endif
+
+
 int align_to(int n, int align);
 
 //

@@ -3,7 +3,19 @@
 #define GP_MAX 6
 #define FP_MAX 8
 
+// For window version we codegen to a big fix buffer
+#ifdef _WIN32
+
+static char* output_buffer = NULL;
+static size_t* output_buffer_size = NULL;
+
+#elif
+
 static FILE *output_file;
+
+#endif
+
+
 static int depth;
 static char *argreg8[] = {"%dil", "%sil", "%dl", "%cl", "%r8b", "%r9b"};
 static char *argreg16[] = {"%di", "%si", "%dx", "%cx", "%r8w", "%r9w"};
@@ -14,6 +26,30 @@ static Obj *current_fn;
 static void gen_expr(Node *node);
 static void gen_stmt(Node *node);
 
+
+#ifdef _WIN32
+
+__attribute__((format(printf, 1, 2)))
+static void println(char *fmt, ...) {
+  size_t current_buffer_size = (*output_buffer_size);
+  size_t remain_buffer_size = MAX_CODE_GEN_BUFFER_CAP - current_buffer_size;
+
+  va_list ap;
+  va_start(ap, fmt);
+  const int fmt_count = snprintf(output_buffer + current_buffer_size, remain_buffer_size, fmt, ap);
+  current_buffer_size += fmt_count;
+  remain_buffer_size -= fmt_count;
+
+  va_end(ap);
+
+  const int fmt_count2 = snprintf(output_buffer + current_buffer_size, remain_buffer_size, "\n");
+  current_buffer_size += fmt_count2;
+
+  (*output_buffer_size) = current_buffer_size;
+}
+
+#elif 
+
 __attribute__((format(printf, 1, 2)))
 static void println(char *fmt, ...) {
   va_list ap;
@@ -22,6 +58,9 @@ static void println(char *fmt, ...) {
   va_end(ap);
   fprintf(output_file, "\n");
 }
+
+#endif
+
 
 static int count(void) {
   static int i = 1;
@@ -1582,6 +1621,23 @@ static void emit_text(Obj *prog) {
   }
 }
 
+#ifdef _WIN32
+
+void codegen(Obj *prog, char* out_buff, size_t* out_buff_size){
+  output_buffer = out_buff;
+  output_buffer_size = out_buff_size;
+
+  File **files = get_input_files();
+  for (int i = 0; files[i]; i++)
+    println("  .file %d \"%s\"", files[i]->file_no, files[i]->name);
+
+  assign_lvar_offsets(prog);
+  emit_data(prog);
+  emit_text(prog);
+}
+
+#elif 
+
 void codegen(Obj *prog, FILE *out) {
   output_file = out;
 
@@ -1593,3 +1649,8 @@ void codegen(Obj *prog, FILE *out) {
   emit_data(prog);
   emit_text(prog);
 }
+
+#endif
+
+
+
