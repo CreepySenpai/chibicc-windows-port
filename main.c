@@ -469,7 +469,7 @@ static void run_subprocess(char **argv) {
 
     CloseHandle(processInfo.hProcess);
 
-  #elif
+  #else
     if (fork() == 0) {
       // Child process. Run a new command.
       execvp(argv[0], argv);
@@ -638,7 +638,7 @@ static void cc1(void) {
 
   codegen(prog, buf, &bufSize);
 
-#elif
+#else
   // Open a temporary output buffer.
   FILE *output_buf = open_memstream(&buf, &bufSize);
     
@@ -732,16 +732,17 @@ static char *find_file(char *pattern) {
 
   find_file_recursive(pathToFind, fileToFind, &path);
 
-#elif
+#else
 
   glob_t buf = {};
   glob(pattern, 0, NULL, &buf);
   if (buf.gl_pathc > 0)
     path = strdup(buf.gl_pathv[buf.gl_pathc - 1]);
   globfree(&buf);
-  return path;
 
 #endif
+
+  return path;
 }
 
 // Returns true if a given file exists.

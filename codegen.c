@@ -9,7 +9,7 @@
 static char* output_buffer = NULL;
 static size_t* output_buffer_size = NULL;
 
-#elif
+#else
 
 static FILE *output_file;
 
@@ -48,7 +48,7 @@ static void println(char *fmt, ...) {
   (*output_buffer_size) = current_buffer_size;
 }
 
-#elif 
+#else
 
 __attribute__((format(printf, 1, 2)))
 static void println(char *fmt, ...) {
@@ -1636,7 +1636,7 @@ void codegen(Obj *prog, char* out_buff, size_t* out_buff_size){
   emit_text(prog);
 }
 
-#elif 
+#else
 
 void codegen(Obj *prog, FILE *out) {
   output_file = out;

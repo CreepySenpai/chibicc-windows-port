@@ -423,7 +423,7 @@ void add_type(Node *node);
 
 void codegen(Obj *prog, char* out_buff, size_t* out_buff_size);
 
-#elif 
+#else
 
 void codegen(Obj *prog, FILE *out);
 
